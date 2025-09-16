@@ -55,6 +55,11 @@ def get_simple_chroma(persist_directory: str, embedding_function, collection_nam
             is_prebuilt = True
             logger.info(f"Found pre-built vector database at {persist_directory}")
 
+    # Also check if we're loading the azure_docs_db specifically
+    if "azure_docs_db" in str(persist_path):
+        is_prebuilt = True
+        logger.info(f"Detected azure_docs_db vector database at {persist_directory}")
+
     # For pre-built databases, never clear them
     if is_prebuilt:
         try:

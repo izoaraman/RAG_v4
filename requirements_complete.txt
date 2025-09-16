@@ -1,0 +1,39 @@
+# Core dependencies
+streamlit
+openai
+tiktoken
+python-dotenv
+pyyaml
+
+# LangChain ecosystem
+langchain
+langchain-community
+langchain-openai
+langchain-core
+
+# Vector databases and embeddings
+chromadb
+
+# Azure integration
+azure-storage-blob
+
+# Document processing
+pypdf
+python-docx
+PyMuPDF
+tabula-py
+pillow
+
+# Data processing
+pandas
+numpy
+scikit-learn
+
+# Optional enhanced components (commented out if build fails)
+# sentence-transformers
+# flashrank
+# faiss-cpu
+# unstructured
+
+# Additional utilities
+aiofiles
