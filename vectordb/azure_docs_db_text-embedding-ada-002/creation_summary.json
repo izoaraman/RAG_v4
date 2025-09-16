@@ -1,0 +1,8 @@
+{
+  "total_documents": 470,
+  "total_chunks": 306,
+  "chunk_size": 1500,
+  "chunk_overlap": 200,
+  "azure_blob_url": "https://sandbox3190080146.blob.core.windows.net/documents/",
+  "creation_timestamp": "2025-09-17 04:51:34"
+}
