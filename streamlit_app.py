@@ -67,6 +67,40 @@ auth_config = get_auth_config()
 USERNAME = auth_config["username"]
 PASSWORD = auth_config["password"]
 
+# Ensure vector database is ready on Streamlit Cloud
+if os.environ.get("STREAMLIT_CLOUD") == "true" or os.path.exists("/home/appuser"):
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
+    from utils.vectordb_init import ensure_vectordb_ready
+    from utils.load_config import LoadConfig
+
+    # Check if we've already initialized in this session
+    if "vectordb_initialized" not in st.session_state:
+        st.session_state.vectordb_initialized = False
+
+    if not st.session_state.vectordb_initialized:
+        # Get the persist directory from config
+        app_config = LoadConfig()
+        persist_dir = app_config.persist_directory
+
+        logger.info(f"Initializing vector database at: {persist_dir}")
+
+        # Try to ensure the database is ready
+        with st.spinner("Initializing vector database from Azure Blob Storage..."):
+            try:
+                if ensure_vectordb_ready(persist_dir):
+                    st.session_state.vectordb_initialized = True
+                    logger.info("Vector database initialized successfully")
+                    st.success("Vector database initialized successfully!")
+                else:
+                    logger.error("Vector database initialization failed")
+                    st.error("Vector database initialization failed. Please check logs.")
+            except Exception as e:
+                logger.error(f"Error during vector database initialization: {e}")
+                st.error(f"Error initializing vector database: {str(e)}")
+
 # Initialize session state
 if "auth" not in st.session_state: 
     st.session_state.auth = False

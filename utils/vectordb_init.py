@@ -195,10 +195,16 @@ def rebuild_vectordb_from_azure(persist_directory: str, embedding_function) -> b
         logger.error(f"Failed to rebuild vector database: {e}")
         return False
 
-def ensure_vectordb_ready(persist_directory: str) -> bool:
-    """Ensure the vector database is ready, rebuild if necessary."""
+def ensure_vectordb_ready(persist_directory: str, force_rebuild: bool = False) -> bool:
+    """Ensure the vector database is ready, rebuild if necessary.
+
+    Args:
+        persist_directory: Directory to store the vector database
+        force_rebuild: If True, always rebuild from Azure (recommended for Streamlit Cloud)
+    """
 
     logger.info(f"Checking vector database at {persist_directory}...")
+    logger.info(f"Environment: STREAMLIT_CLOUD={os.environ.get('STREAMLIT_CLOUD')}, Force rebuild={force_rebuild}")
 
     try:
         # Initialize embeddings
@@ -209,20 +215,34 @@ def ensure_vectordb_ready(persist_directory: str) -> bool:
             api_key=os.getenv("AZURE_OPENAI_API_KEY")
         )
 
-        # Check if database is healthy
+        # On Streamlit Cloud, ALWAYS rebuild from Azure for reliability
+        # This ensures we always have the latest documents from Azure
+        is_streamlit_cloud = os.environ.get("STREAMLIT_CLOUD") == "true" or os.path.exists("/home/appuser")
+
+        if is_streamlit_cloud or force_rebuild:
+            logger.info("Streamlit Cloud detected or force rebuild requested. Rebuilding from Azure...")
+            if rebuild_vectordb_from_azure(persist_directory, embeddings):
+                logger.info("Successfully rebuilt vector database from Azure")
+                return True
+            else:
+                logger.error("Failed to rebuild from Azure")
+                return False
+
+        # For local development, check if database is healthy
         if check_vectordb_health(persist_directory, embeddings):
             logger.info("Vector database is healthy")
             return True
 
-        # On Streamlit Cloud, try to rebuild from Azure
-        if os.environ.get("STREAMLIT_CLOUD") == "true":
-            logger.info("Attempting to rebuild vector database from Azure...")
-            if rebuild_vectordb_from_azure(persist_directory, embeddings):
-                return True
+        # If local database is not healthy, try to rebuild
+        logger.info("Local database not healthy, attempting to rebuild from Azure...")
+        if rebuild_vectordb_from_azure(persist_directory, embeddings):
+            return True
 
         logger.error("Could not ensure vector database is ready")
         return False
 
     except Exception as e:
         logger.error(f"Error ensuring vector database: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return False
