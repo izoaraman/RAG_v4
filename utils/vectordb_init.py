@@ -302,11 +302,12 @@ def ensure_vectordb_ready(persist_directory: str, force_rebuild: bool = False) -
         if is_streamlit_cloud:
             logger.info("🎯 STREAMLIT CLOUD DETECTED - Looking for pre-built 20-document vectordb...")
 
-            # Try multiple demo vectordb locations - prioritize the one with 4924 chunks
+            # Try multiple demo vectordb locations - use the actual existing paths
             demo_paths = [
-                Path("vectordb/demo_vectordb/azure_docs_db_text-embedding-ada-002_20docs"),  # 4924 chunks from 20 docs
-                Path("vectordb/test_single"),  # 35 chunks test
-                Path("vectordb/demo_vectordb_simple"),  # Copy of test_single
+                Path("vectordb/azure_docs_db_text-embedding-ada-002/azure_docs_db_text-embedding-ada-002_20docs"),  # 62MB with 4924 chunks from 20 docs
+                Path("vectordb/demo_vectordb/azure_docs_db_text-embedding-ada-002_20docs"),  # Same 62MB database (backup)
+                Path("vectordb/test_single"),  # 804KB with 35 chunks (fallback)
+                Path("vectordb/demo_vectordb_simple"),  # 804KB copy of test_single (fallback)
             ]
 
             for demo_db_path in demo_paths:
