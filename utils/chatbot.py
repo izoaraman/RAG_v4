@@ -360,6 +360,9 @@ class ChatBot:
                         "No valid LLM credentials found. Set AZURE_OPENAI_API_KEY/AZURE_OPENAI_ENDPOINT or OPENAI_API_KEY."
                     )
             
+            # Clean up file paths in the LLM response citations
+            response_text = ChatBot._clean_response_paths(response_text)
+
             chatbot.append({"role": "user", "content": message})
             chatbot.append({"role": "assistant", "content": response_text})
 
@@ -502,3 +505,16 @@ class ChatBot:
                 continue
 
         return markdown_documents, structured_sources
+
+    @staticmethod
+    def _clean_response_paths(response_text):
+        """Remove unwanted local file path prefixes from LLM response citations."""
+        import re
+
+        # Pattern to match the unwanted path prefix and timestamp prefix
+        path_pattern = r'C:/Users/izoar/OneDrive/Documents/Study/ACCC/RAG_v4/data/docs/(?:\d{8}_\d{6}_[a-f0-9]{8}_)?'
+
+        # Replace the pattern with empty string
+        cleaned_response = re.sub(path_pattern, '', response_text)
+
+        return cleaned_response
