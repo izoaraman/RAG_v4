@@ -60,6 +60,12 @@ def get_simple_chroma(persist_directory: str, embedding_function, collection_nam
         is_prebuilt = True
         logger.info(f"Detected azure_docs_db vector database at {persist_directory}")
 
+    # CRITICAL: Also detect test_single and demo_vectordb_simple which only have chroma.sqlite3
+    if persist_path.exists() and (persist_path / "chroma.sqlite3").exists():
+        if "test_single" in str(persist_path) or "demo_vectordb_simple" in str(persist_path):
+            is_prebuilt = True
+            logger.info(f"Detected working demo database at {persist_directory}")
+
     # For pre-built databases, never clear them
     if is_prebuilt:
         try:
