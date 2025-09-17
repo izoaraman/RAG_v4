@@ -132,8 +132,8 @@ class ChatBot:
         try:
             query_lower = message.lower()
             # Check if the query is asking for a full list of documents.
-            if ("list" in query_lower and "source" in query_lower and "document" in query_lower 
-                and ("all" in query_lower or "full" in query_lower)):
+            if ("list" in query_lower and "document" in query_lower
+                and ("all" in query_lower or "full" in query_lower or "vector" in query_lower)):
                 from .vector_utils import list_all_source_documents
                 unique_sources = list_all_source_documents(APPCFG.persist_directory, APPCFG.embedding_model)
                 answer = "The source documents in the vector database are:\n" + "\n".join(unique_sources)
