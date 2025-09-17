@@ -1,5 +1,5 @@
 directories:
-  data_directory: data/test_docs
+  data_directory: data/docs
   data_directory_2: docs_2
   persist_directory: vectordb/azure_docs_db_text-embedding-ada-002
   custom_persist_directory: vectordb_new/
