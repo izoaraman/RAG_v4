@@ -835,7 +835,8 @@ def app_view():
                 save_dir.mkdir(parents=True, exist_ok=True)
             else:
                 save_dir = DATA_DIR / "docs"
-            
+                save_dir.mkdir(parents=True, exist_ok=True)
+
             for uploaded_file in uploaded_files:
                 output_path = save_dir / uploaded_file.name
                 with open(output_path, "wb") as f:
