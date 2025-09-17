@@ -304,13 +304,19 @@ def upload_data_for_mode(mode="current", clear_existing=False, enable_multimodal
         return
     
     # Use simplified Chroma initialization
-    # For "new" mode on Streamlit Cloud, force in-memory to avoid readonly filesystem issues
+    # For "new" mode on Streamlit Cloud, use temporary persistent directory instead of in-memory
+    # This allows the database to persist for the session duration
     if mode == "new" and (os.environ.get("STREAMLIT_CLOUD") == "true" or os.path.exists("/home/appuser")):
-        print("Using in-memory vector database for New document mode on Streamlit Cloud")
-        from langchain_community.vectorstores import Chroma
-        vectordb = Chroma(
+        print("Using temporary persistent vector database for New document mode on Streamlit Cloud")
+        # Use temp directory that's writable on Streamlit Cloud
+        import tempfile
+        temp_persist_dir = os.path.join(tempfile.gettempdir(), "streamlit_vectordb_new")
+        print(f"Temporary database location: {temp_persist_dir}")
+        vectordb = get_simple_chroma(
+            persist_directory=temp_persist_dir,
             embedding_function=CONFIG.embedding_model,
-            collection_name="langchain_new_docs"
+            collection_name="langchain",
+            mode=mode
         )
     else:
         vectordb = get_simple_chroma(

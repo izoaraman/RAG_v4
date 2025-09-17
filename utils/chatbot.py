@@ -201,7 +201,17 @@ class ChatBot:
             if data_type == "Current documents":
                 persist_dir = APPCFG.persist_directory
             elif data_type == "New document":
-                persist_dir = APPCFG.custom_persist_directory
+                # Use temporary directory on Streamlit Cloud to match upload logic
+                is_streamlit_cloud = (
+                    os.environ.get("STREAMLIT_CLOUD") == "true" or
+                    os.path.exists("/home/appuser")
+                )
+                if is_streamlit_cloud:
+                    import tempfile
+                    persist_dir = os.path.join(tempfile.gettempdir(), "streamlit_vectordb_new")
+                    logging.info(f"Using temporary database for New document mode: {persist_dir}")
+                else:
+                    persist_dir = APPCFG.custom_persist_directory
             else:
                 raise ValueError("Invalid data_type provided.")
                 

@@ -315,14 +315,13 @@ def ensure_vectordb_ready(persist_directory: str, force_rebuild: bool = False) -
             else:
                 logger.info("🎯 LOCAL ENVIRONMENT - Looking for pre-built demo vectordb for Current documents mode...")
 
-            # PRIORITIZE WORKING test_single that was proven to work!
+            # PRIORITIZE 20-document demo database for proper ACCC content
             demo_paths = [
-                Path("vectordb/test_single"),  # 804KB WORKING database - use this first!
+                Path("vectordb/demo_vectordb/azure_docs_db_text-embedding-ada-002_20docs"),  # 62MB with 20 ACCC documents
+                Path("vectordb/azure_docs_db_text-embedding-ada-002/azure_docs_db_text-embedding-ada-002_20docs"),  # Alternative location
+                Path("vectordb/test_single"),  # 804KB single document fallback
                 Path("vectordb/demo_vectordb_simple"),  # 804KB copy of test_single
                 Path("vectordb/cloud_test"),  # Another 804KB test database
-                # Skip the 62MB databases - they have corruption issues
-                # Path("vectordb/azure_docs_db_text-embedding-ada-002/azure_docs_db_text-embedding-ada-002_20docs"),
-                # Path("vectordb/demo_vectordb/azure_docs_db_text-embedding-ada-002_20docs"),
             ]
 
             for demo_db_path in demo_paths:
