@@ -53,12 +53,13 @@ test_*/
 *test*/
 
 # Vector databases
-# Exclude SQLite files and temp databases
+# Exclude SQLite files and temp databases but keep demo vectordb
 *.sqlite3
 *.sqlite
 vectordb/*
 !vectordb/azure_blob_metadata.json
-!vectordb/azure_docs_db_text-embedding-ada-002/
+!vectordb/azure_blob_metadata_demo.json
+!vectordb/demo_vectordb/
 vectordb_*/
 chroma/
 

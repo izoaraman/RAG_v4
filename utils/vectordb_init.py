@@ -298,9 +298,27 @@ def ensure_vectordb_ready(persist_directory: str, force_rebuild: bool = False) -
         persist_path = Path(persist_directory)
         is_streamlit_cloud = os.environ.get("STREAMLIT_CLOUD") == "true" or os.path.exists("/home/appuser")
 
-        # On Streamlit Cloud, check for existing pre-built database
+        # On Streamlit Cloud, check for existing pre-built demo database
         if is_streamlit_cloud:
-            # Check if pre-built database exists
+            # Check for demo vectordb first
+            demo_db_path = Path("vectordb/demo_vectordb")
+            if demo_db_path.exists():
+                demo_summary = demo_db_path / "creation_summary.json"
+                demo_chroma = demo_db_path / "chroma.sqlite3"
+
+                if demo_summary.exists() or demo_chroma.exists():
+                    logger.info("🎯 Found pre-built DEMO vectordb - copying to target location")
+
+                    # Copy demo vectordb to target location
+                    import shutil
+                    if persist_path.exists():
+                        shutil.rmtree(persist_path)
+                    shutil.copytree(demo_db_path, persist_path)
+
+                    logger.info("✅ Demo vectordb copied successfully - ready to use!")
+                    return True
+
+            # Fallback: Check if pre-built database exists at target location
             if persist_path.exists():
                 summary_file = persist_path / "creation_summary.json"
                 chroma_db = persist_path / "chroma.sqlite3"
