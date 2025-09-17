@@ -28,11 +28,17 @@ from langchain_core.runnables import RunnableLambda, RunnablePassthrough
 from langchain.memory import ConversationBufferWindowMemory
 from langchain_community.chat_models import AzureChatOpenAI
 
+# Configure logging first
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 try:
     from langgraph.graph import StateGraph, END
     from langgraph.prebuilt import ToolExecutor, ToolInvocation
     from langgraph.checkpoint.sqlite import SqliteSaver
+    LANGGRAPH_AVAILABLE = True
 except ImportError:
+    LANGGRAPH_AVAILABLE = False
     logger.warning("LangGraph not available. Install with: pip install langgraph")
 
 from pydantic import BaseModel, Field
@@ -42,9 +48,7 @@ from .retriever_multimodal import MultimodalRetriever
 from .retriever_graph import GraphRetriever
 from .index_multimodal import MultimodalIndexer
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Logger already configured above
 
 class QueryType(Enum):
     """Types of queries the system can handle"""
