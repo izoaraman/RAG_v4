@@ -48,7 +48,7 @@ def check_vectordb_health(persist_directory: str, embedding_function) -> bool:
         logger.error(f"Vector database health check failed: {e}")
         return False
 
-def rebuild_vectordb_from_azure(persist_directory: str, embedding_function) -> bool:
+def rebuild_vectordb_from_azure(persist_directory: str, embedding_function, use_simple_db: bool = False) -> bool:
     """Rebuild vector database from Azure Blob Storage."""
 
     logger.info("Starting vector database rebuild from Azure...")
@@ -154,7 +154,19 @@ def rebuild_vectordb_from_azure(persist_directory: str, embedding_function) -> b
 
         logger.info(f"Processed {len(all_docs)} document chunks")
 
-        # Create vector database - simpler approach
+        # On Streamlit Cloud with newer ChromaDB versions, use SimpleVectorDB as fallback
+        if use_simple_db or (os.environ.get("STREAMLIT_CLOUD") == "true"):
+            logger.info("Using SimpleVectorDB as fallback for Streamlit Cloud")
+            from utils.simple_vectordb import create_simple_vectordb
+
+            # Create SimpleVectorDB
+            vectordb = create_simple_vectordb(persist_directory, embedding_function, all_docs)
+
+            logger.info(f"Successfully created SimpleVectorDB with {vectordb.count()} documents")
+
+            return True
+
+        # Try ChromaDB for local development
         # Clear existing directory
         persist_path = Path(persist_directory)
         if persist_path.exists():
@@ -163,23 +175,67 @@ def rebuild_vectordb_from_azure(persist_directory: str, embedding_function) -> b
 
         persist_path.mkdir(parents=True, exist_ok=True)
 
-        # Use direct Chroma initialization (without the tenants table issue)
+        # Use direct ChromaDB PersistentClient to bypass tenants table issue
+        import chromadb
+        from chromadb.config import Settings
         from langchain_community.vectorstores import Chroma
+        import uuid
 
-        # Split documents into texts and metadatas
-        texts = [doc.page_content for doc in all_docs]
-        metadatas = [doc.metadata for doc in all_docs]
-
-        # Create vector store using from_texts which avoids the tenants issue
-        vectorstore = Chroma.from_texts(
-            texts=texts,
-            metadatas=metadatas,
-            embedding=embedding_function,
-            persist_directory=persist_directory,
-            collection_name="langchain"
+        # Create ChromaDB client with specific settings
+        client = chromadb.PersistentClient(
+            path=str(persist_path),
+            settings=Settings(
+                anonymized_telemetry=False,
+                allow_reset=True,
+                is_persistent=True
+            )
         )
 
+        # Create or get collection
+        collection_name = "langchain"
+        try:
+            # Delete existing collection if it exists
+            client.delete_collection(name=collection_name)
+        except:
+            pass  # Collection doesn't exist, that's fine
+
+        # Create new collection
+        collection = client.create_collection(
+            name=collection_name,
+            metadata={"hnsw:space": "cosine"}
+        )
+
+        # Process documents in batches
+        batch_size = 100
+        for i in range(0, len(all_docs), batch_size):
+            batch = all_docs[i:min(i+batch_size, len(all_docs))]
+
+            # Prepare batch data
+            texts = [doc.page_content for doc in batch]
+            metadatas = [doc.metadata for doc in batch]
+            ids = [str(uuid.uuid4()) for _ in batch]
+
+            # Generate embeddings
+            embeddings = embedding_function.embed_documents(texts)
+
+            # Add to collection
+            collection.add(
+                embeddings=embeddings,
+                documents=texts,
+                metadatas=metadatas,
+                ids=ids
+            )
+
+            logger.info(f"Added batch {i//batch_size + 1}/{(len(all_docs)-1)//batch_size + 1}")
+
         logger.info(f"Successfully created vector database with {len(all_docs)} documents")
+
+        # Create a Chroma wrapper for compatibility
+        vectorstore = Chroma(
+            client=client,
+            collection_name=collection_name,
+            embedding_function=embedding_function
+        )
 
         # Create summary file
         summary = {
@@ -231,7 +287,8 @@ def ensure_vectordb_ready(persist_directory: str, force_rebuild: bool = False) -
 
         if is_streamlit_cloud or force_rebuild:
             logger.info("Streamlit Cloud detected or force rebuild requested. Rebuilding from Azure...")
-            if rebuild_vectordb_from_azure(persist_directory, embeddings):
+            # Use SimpleVectorDB on Streamlit Cloud to avoid ChromaDB tenants issue
+            if rebuild_vectordb_from_azure(persist_directory, embeddings, use_simple_db=is_streamlit_cloud):
                 logger.info("Successfully rebuilt vector database from Azure")
                 return True
             else:

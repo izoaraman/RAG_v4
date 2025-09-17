@@ -143,6 +143,40 @@ def get_simple_chroma(persist_directory: str, embedding_function, collection_nam
     except Exception as e:
         logger.error(f"Failed to initialize Chroma: {e}")
 
+        # Check if this is a tenants table error on Streamlit Cloud
+        if "no such table: tenants" in str(e) and os.environ.get("STREAMLIT_CLOUD") == "true":
+            logger.info("Detected tenants table error on Streamlit Cloud - using SimpleVectorDB fallback")
+
+            # Use SimpleVectorDB as fallback
+            from utils.simple_vectordb import SimpleVectorDB
+
+            # Check if we need to load existing data
+            simple_db_path = persist_path / "simple_vectordb.pkl"
+
+            db = SimpleVectorDB(str(persist_path), embedding_function)
+
+            # Try to load existing data
+            if simple_db_path.exists():
+                if db.load():
+                    logger.info(f"Loaded existing SimpleVectorDB with {db.count()} documents")
+                    return db
+
+            # If no existing data and this is azure_docs_db, rebuild from Azure
+            if "azure_docs_db" in str(persist_path):
+                logger.info("Rebuilding SimpleVectorDB from Azure for azure_docs_db")
+                from utils.vectordb_init import rebuild_vectordb_from_azure
+
+                # Rebuild using SimpleVectorDB
+                if rebuild_vectordb_from_azure(str(persist_path), embedding_function, use_simple_db=True):
+                    # Load the rebuilt database
+                    db.load()
+                    logger.info(f"Rebuilt and loaded SimpleVectorDB with {db.count()} documents")
+                    return db
+
+            # Return empty SimpleVectorDB
+            logger.info("Returning empty SimpleVectorDB")
+            return db
+
         # Last resort - in-memory database (only for non-prebuilt)
         if not is_prebuilt:
             logger.warning("Falling back to in-memory Chroma database")
