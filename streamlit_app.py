@@ -1103,9 +1103,11 @@ def app_view():
                         })
                         
                         # Store references and answer for the Sources tab
+                        # Always store the references, even if empty
+                        st.session_state.references_last = refs_md if refs_md else ""
+                        st.session_state.answer_last = answer_text  # Store answer for citation filtering
+
                         if refs_md:
-                            st.session_state.references_last = refs_md
-                            st.session_state.answer_last = answer_text  # Store answer for citation filtering
                             # Show a subtle indicator that sources are available
                             st.caption("View source documents in the 'Sources' tab below")
                         
