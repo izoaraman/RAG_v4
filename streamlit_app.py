@@ -81,25 +81,34 @@ if os.environ.get("STREAMLIT_CLOUD") == "true" or os.path.exists("/home/appuser"
         st.session_state.vectordb_initialized = False
 
     if not st.session_state.vectordb_initialized:
-        # Get the persist directory from config
-        app_config = LoadConfig()
-        persist_dir = app_config.persist_directory
-
-        logger.info(f"Initializing vector database at: {persist_dir}")
-
-        # Try to ensure the database is ready
-        with st.spinner("Initializing vector database from Azure Blob Storage..."):
+        try:
+            # Get the persist directory from config
+            app_config = LoadConfig()
+            persist_dir = app_config.persist_directory
+            logger.info(f"Initializing vector database at: {persist_dir}")
+        except Exception as e:
+            logger.error(f"Error loading config: {e}")
+            # Continue without database - app should still run
+            st.session_state.vectordb_initialized = True
+            st.warning("Could not load configuration. Some features may be limited.")
+        else:
+            # Try to ensure the database is ready (without spinner to avoid crashes)
             try:
-                if ensure_vectordb_ready(persist_dir):
-                    st.session_state.vectordb_initialized = True
+                logger.info("Starting vector database initialization...")
+                result = ensure_vectordb_ready(persist_dir)
+                st.session_state.vectordb_initialized = True
+
+                if result:
                     logger.info("Vector database initialized successfully")
-                    st.success("Vector database initialized successfully!")
                 else:
-                    logger.error("Vector database initialization failed")
-                    st.error("Vector database initialization failed. Please check logs.")
+                    logger.warning("Vector database initialization incomplete, but continuing")
+
             except Exception as e:
                 logger.error(f"Error during vector database initialization: {e}")
-                st.error(f"Error initializing vector database: {str(e)}")
+                # Mark as initialized to prevent retry loops
+                st.session_state.vectordb_initialized = True
+                # Don't crash the app - continue with limited functionality
+                st.warning("Vector database initialization had issues. Some features may be limited.")
 
 # Initialize session state
 if "auth" not in st.session_state: 
