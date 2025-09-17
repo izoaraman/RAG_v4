@@ -311,15 +311,25 @@ def ensure_vectordb_ready(persist_directory: str, force_rebuild: bool = False) -
             ]
 
             for demo_db_path in demo_paths:
-                if demo_db_path.exists():
+                # Make path absolute for Streamlit Cloud
+                if not demo_db_path.is_absolute():
+                    # Convert to absolute path based on current working directory
+                    import os
+                    cwd = Path(os.getcwd())
+                    demo_db_path_abs = cwd / demo_db_path
+                else:
+                    demo_db_path_abs = demo_db_path
+
+                if demo_db_path_abs.exists():
                     # Look for chroma.sqlite3 file directly in root (preferred structure)
-                    demo_chroma = demo_db_path / "chroma.sqlite3"
+                    demo_chroma = demo_db_path_abs / "chroma.sqlite3"
 
                     if demo_chroma.exists():
-                        # Check file size to ensure it's valid (should be ~800KB for 20 docs)
+                        # Check file size to ensure it's valid (62MB for full 20 docs, 800KB for test)
                         file_size_kb = demo_chroma.stat().st_size / 1024
                         logger.info(f"✅ Found pre-built vectordb at: {demo_db_path}")
                         logger.info(f"✅ Database size: {file_size_kb:.1f} KB (20 documents)")
+                        logger.info(f"✅ Absolute path: {demo_db_path_abs}")
 
                         # Copy demo vectordb to target location
                         import shutil
@@ -329,20 +339,24 @@ def ensure_vectordb_ready(persist_directory: str, force_rebuild: bool = False) -
                             except:
                                 logger.warning("Could not remove existing path, continuing...")
 
-                        shutil.copytree(demo_db_path, persist_path)
+                        # Use absolute path for copy operation
+                        logger.info(f"Copying from {demo_db_path_abs} to {persist_path}")
+                        shutil.copytree(str(demo_db_path_abs), str(persist_path))
                         logger.info("✅ Pre-built 20-document vectordb copied successfully!")
                         logger.info("✅ Using curated ACCC documents including card surcharges, annual reports, etc.")
                         return True
 
                     # Fallback: check for nested SQLite files
-                    demo_chroma_nested = list(demo_db_path.glob("**/chroma.sqlite3"))
+                    demo_chroma_nested = list(demo_db_path_abs.glob("**/chroma.sqlite3"))
                     if demo_chroma_nested:
                         logger.info(f"Found {len(demo_chroma_nested)} nested chroma files at {demo_db_path}")
+                        logger.info(f"Absolute path: {demo_db_path_abs}")
                         # Still copy the whole structure
                         import shutil
                         if persist_path.exists():
                             shutil.rmtree(persist_path)
-                        shutil.copytree(demo_db_path, persist_path)
+                        # Use absolute path for copy
+                        shutil.copytree(str(demo_db_path_abs), str(persist_path))
                         logger.info("✅ Pre-built vectordb with nested structure copied")
                         return True
                     else:
