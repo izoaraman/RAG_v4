@@ -303,11 +303,14 @@ def ensure_vectordb_ready(persist_directory: str, force_rebuild: bool = False) -
             # Check for demo vectordb first
             demo_db_path = Path("vectordb/demo_vectordb")
             if demo_db_path.exists():
-                demo_summary = demo_db_path / "creation_summary.json"
-                demo_chroma = demo_db_path / "chroma.sqlite3"
+                # Look for any chroma.sqlite3 file in subdirectories
+                import glob
+                demo_chroma_files = list(demo_db_path.glob("**/chroma.sqlite3"))
+                demo_summary_files = list(demo_db_path.glob("**/creation_summary.json"))
 
-                if demo_summary.exists() or demo_chroma.exists():
+                if demo_chroma_files or demo_summary_files:
                     logger.info("🎯 Found pre-built DEMO vectordb - copying to target location")
+                    logger.info(f"Demo files found: {len(demo_chroma_files)} chroma files, {len(demo_summary_files)} summary files")
 
                     # Copy demo vectordb to target location
                     import shutil
@@ -317,6 +320,8 @@ def ensure_vectordb_ready(persist_directory: str, force_rebuild: bool = False) -
 
                     logger.info("✅ Demo vectordb copied successfully - ready to use!")
                     return True
+                else:
+                    logger.warning("Demo vectordb directory exists but no database files found")
 
             # Fallback: Check if pre-built database exists at target location
             if persist_path.exists():
