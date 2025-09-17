@@ -281,14 +281,43 @@ def ensure_vectordb_ready(persist_directory: str, force_rebuild: bool = False) -
             api_key=os.getenv("AZURE_OPENAI_API_KEY")
         )
 
-        # On Streamlit Cloud, ALWAYS rebuild from Azure for reliability
-        # This ensures we always have the latest documents from Azure
+        # Check if we have a pre-built database first
+        persist_path = Path(persist_directory)
         is_streamlit_cloud = os.environ.get("STREAMLIT_CLOUD") == "true" or os.path.exists("/home/appuser")
 
-        if is_streamlit_cloud or force_rebuild:
-            logger.info("Streamlit Cloud detected or force rebuild requested. Rebuilding from Azure...")
+        # On Streamlit Cloud, check for existing pre-built database
+        if is_streamlit_cloud:
+            # Check if pre-built database exists
+            if persist_path.exists():
+                summary_file = persist_path / "creation_summary.json"
+                chroma_db = persist_path / "chroma.sqlite3"
+
+                # If we have the pre-built database files, use them
+                if summary_file.exists() or chroma_db.exists():
+                    logger.info("Found pre-built vector database from GitHub, using it directly")
+                    # Test if it's healthy
+                    if check_vectordb_health(persist_directory, embeddings):
+                        logger.info("Pre-built database is healthy and ready to use")
+                        return True
+                    else:
+                        logger.warning("Pre-built database exists but may need initialization")
+                        # Still return True as the database files exist
+                        return True
+
+            # Only rebuild if we don't have a pre-built database
+            logger.info("No pre-built database found, attempting rebuild from Azure...")
             # Use SimpleVectorDB on Streamlit Cloud to avoid ChromaDB tenants issue
-            if rebuild_vectordb_from_azure(persist_directory, embeddings, use_simple_db=is_streamlit_cloud):
+            if rebuild_vectordb_from_azure(persist_directory, embeddings, use_simple_db=True):
+                logger.info("Successfully rebuilt vector database from Azure")
+                return True
+            else:
+                logger.error("Failed to rebuild from Azure")
+                return False
+
+        # For non-Streamlit Cloud (local), check as before
+        if force_rebuild:
+            logger.info("Force rebuild requested. Rebuilding from Azure...")
+            if rebuild_vectordb_from_azure(persist_directory, embeddings, use_simple_db=False):
                 logger.info("Successfully rebuilt vector database from Azure")
                 return True
             else:
