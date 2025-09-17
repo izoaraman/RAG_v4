@@ -350,12 +350,19 @@ def ensure_vectordb_ready(persist_directory: str, force_rebuild: bool = False) -
                         if persist_path.exists():
                             try:
                                 shutil.rmtree(persist_path)
-                            except:
-                                logger.warning("Could not remove existing path, continuing...")
+                                logger.info("Successfully removed existing directory")
+                            except Exception as e:
+                                logger.warning(f"Could not remove existing path: {e}")
+                                # If removal fails, we'll copy with dirs_exist_ok=True
 
                         # Use absolute path for copy operation
                         logger.info(f"Copying from {demo_db_path_abs} to {persist_path}")
-                        shutil.copytree(str(demo_db_path_abs), str(persist_path))
+                        try:
+                            shutil.copytree(str(demo_db_path_abs), str(persist_path))
+                        except FileExistsError:
+                            # If directory exists, use dirs_exist_ok=True to overwrite contents
+                            logger.info("Directory exists, copying with overwrite...")
+                            shutil.copytree(str(demo_db_path_abs), str(persist_path), dirs_exist_ok=True)
                         logger.info("✅ Pre-built 20-document vectordb copied successfully!")
                         logger.info("✅ Using curated ACCC documents including card surcharges, annual reports, etc.")
                         return True
