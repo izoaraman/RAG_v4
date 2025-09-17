@@ -58,6 +58,7 @@ test_*/
 *.sqlite
 vectordb/*
 !vectordb/azure_blob_metadata.json
+!vectordb/azure_docs_db_text-embedding-ada-002/
 vectordb_*/
 chroma/
 
