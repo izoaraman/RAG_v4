@@ -55,8 +55,12 @@ def rebuild_vectordb_from_azure(persist_directory: str, embedding_function, use_
     logger.info(f"Target directory: {persist_directory}")
 
     try:
-        # Load Azure metadata
-        metadata_file = "vectordb/azure_blob_metadata.json"
+        # Load Azure metadata - use demo version for Streamlit Cloud
+        is_streamlit_cloud = os.environ.get("STREAMLIT_CLOUD") == "true" or os.path.exists("/home/appuser")
+        if is_streamlit_cloud:
+            metadata_file = "vectordb/azure_blob_metadata_demo.json"
+        else:
+            metadata_file = "vectordb/azure_blob_metadata.json"
         metadata_path = Path(metadata_file)
 
         if not metadata_path.exists():
@@ -341,4 +345,217 @@ def ensure_vectordb_ready(persist_directory: str, force_rebuild: bool = False) -
         logger.error(f"Error ensuring vector database: {e}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
+        return False
+
+def rebuild_vectordb_from_azure_batch(persist_directory: str, embedding_function, documents: list, batch_num: int) -> bool:
+    """Rebuild vector database from a batch of Azure documents."""
+
+    logger.info(f"Processing batch {batch_num} with {len(documents)} documents")
+    logger.info(f"Target directory: {persist_directory}")
+
+    try:
+        # Initialize text splitter
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1500,
+            chunk_overlap=200,
+            separators=["\\n\\n", "\\n", ".", "!", "?", ",", " ", ""]
+        )
+
+        # Initialize Azure Blob client
+        connection_string = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
+        if not connection_string:
+            logger.error("AZURE_STORAGE_CONNECTION_STRING not found")
+            return False
+
+        blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+        container_name = "documents"  # Default container name
+
+        # Process documents in this batch
+        batch_docs = []
+
+        for doc_info in documents:
+            try:
+                blob_name = doc_info.get('blob_name')
+                file_name = doc_info.get('file_name')
+
+                logger.info(f"Processing: {file_name}")
+
+                # Download blob
+                blob_client = blob_service_client.get_blob_client(
+                    container=container_name,
+                    blob=blob_name
+                )
+                blob_data = blob_client.download_blob().readall()
+
+                # Extract text from PDF
+                pdf_file = BytesIO(blob_data)
+                pdf_reader = pypdf.PdfReader(pdf_file)
+                text_content = []
+
+                for page_num, page in enumerate(pdf_reader.pages):
+                    try:
+                        page_text = page.extract_text()
+                        if page_text:
+                            text_content.append(f"[Page {page_num + 1}]\\n{page_text}")
+                    except:
+                        continue
+
+                text = "\\n\\n".join(text_content)
+
+                if not text:
+                    logger.warning(f"No text extracted from {file_name}")
+                    continue
+
+                # Create chunks
+                chunks = text_splitter.split_text(text)
+
+                # Create Document objects with metadata
+                for chunk in chunks:
+                    doc = Document(
+                        page_content=chunk,
+                        metadata={
+                            "source": file_name,
+                            "blob_name": blob_name,
+                            "pdf_url": doc_info.get('public_url', ''),
+                            "container": container_name,
+                            "batch_num": batch_num
+                        }
+                    )
+                    batch_docs.append(doc)
+
+                logger.info(f"✅ Processed {file_name}: {len(chunks)} chunks")
+
+            except Exception as e:
+                logger.error(f"❌ Error processing {doc_info.get('file_name')}: {e}")
+                continue
+
+        if not batch_docs:
+            logger.error("No documents were successfully processed in this batch")
+            return False
+
+        logger.info(f"Batch {batch_num}: Processed {len(batch_docs)} document chunks")
+
+        # Initialize or append to vector database
+        persist_path = Path(persist_directory)
+
+        # Check if this is the first batch (no existing database)
+        is_first_batch = not persist_path.exists() or batch_num == 1
+
+        if is_first_batch:
+            logger.info("Creating new vector database (first batch)")
+            # Clear existing directory for fresh start
+            if persist_path.exists():
+                import shutil
+                shutil.rmtree(persist_path)
+            persist_path.mkdir(parents=True, exist_ok=True)
+        else:
+            logger.info(f"Appending to existing vector database (batch {batch_num})")
+
+        # Use simple vectordb for cloud compatibility
+        is_streamlit_cloud = os.environ.get("STREAMLIT_CLOUD") == "true" or os.path.exists("/home/appuser")
+
+        if is_streamlit_cloud:
+            logger.info("Using SimpleVectorDB for Streamlit Cloud compatibility")
+            from utils.simple_vectordb import SimpleVectorDB, append_to_simple_vectordb
+
+            if is_first_batch:
+                # Create new SimpleVectorDB
+                vectordb = SimpleVectorDB(str(persist_path), embedding_function)
+                # Add documents
+                texts = [doc.page_content for doc in batch_docs]
+                metadatas = [doc.metadata for doc in batch_docs]
+                vectordb.add_texts(texts, metadatas)
+                vectordb.save()
+            else:
+                # Append to existing SimpleVectorDB
+                append_to_simple_vectordb(str(persist_path), embedding_function, batch_docs)
+
+        else:
+            # Use ChromaDB for local processing
+            import chromadb
+            from chromadb.config import Settings
+            from langchain_community.vectorstores import Chroma
+            import uuid
+
+            # Create or load ChromaDB client
+            client = chromadb.PersistentClient(
+                path=str(persist_path),
+                settings=Settings(
+                    anonymized_telemetry=False,
+                    allow_reset=False,  # Don't reset existing data
+                    is_persistent=True
+                )
+            )
+
+            collection_name = "langchain"
+
+            if is_first_batch:
+                # Create new collection
+                try:
+                    client.delete_collection(name=collection_name)
+                except:
+                    pass  # Collection doesn't exist
+
+                collection = client.create_collection(
+                    name=collection_name,
+                    metadata={"hnsw:space": "cosine"}
+                )
+            else:
+                # Get existing collection
+                collection = client.get_collection(name=collection_name)
+
+            # Process documents in smaller batches for embeddings
+            embedding_batch_size = 50
+            for i in range(0, len(batch_docs), embedding_batch_size):
+                batch = batch_docs[i:min(i+embedding_batch_size, len(batch_docs))]
+
+                # Prepare batch data
+                texts = [doc.page_content for doc in batch]
+                metadatas = [doc.metadata for doc in batch]
+                ids = [str(uuid.uuid4()) for _ in batch]
+
+                # Generate embeddings
+                embeddings = embedding_function.embed_documents(texts)
+
+                # Add to collection
+                collection.add(
+                    embeddings=embeddings,
+                    documents=texts,
+                    metadatas=metadatas,
+                    ids=ids
+                )
+
+                logger.info(f"Added embedding batch {i//embedding_batch_size + 1}")
+
+        # Create/update summary file
+        summary_file = persist_path / "creation_summary.json"
+        summary = {
+            "last_batch": batch_num,
+            "total_chunks_processed": len(batch_docs),
+            "chunk_size": 1500,
+            "chunk_overlap": 200,
+            "azure_blob_url": "https://sandbox3190080146.blob.core.windows.net/documents/",
+            "last_update": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "batch_processing": True
+        }
+
+        # If summary exists, update it; otherwise create new
+        if summary_file.exists():
+            with open(summary_file, 'r', encoding='utf-8') as f:
+                existing_summary = json.load(f)
+
+            existing_summary.update(summary)
+            existing_summary["total_chunks_processed"] = existing_summary.get("total_chunks_processed", 0) + len(batch_docs)
+            summary = existing_summary
+
+        with open(summary_file, 'w', encoding='utf-8') as f:
+            json.dump(summary, f, indent=2)
+
+        logger.info(f"✅ Batch {batch_num} completed successfully with {len(batch_docs)} chunks")
+        return True
+
+    except Exception as e:
+        logger.error(f"❌ Failed to process batch {batch_num}: {e}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         return False
