@@ -307,9 +307,13 @@ def ensure_vectordb_ready(persist_directory: str, force_rebuild: bool = False) -
             "/mount/src/" in os.getcwd()
         )
 
-        # On Streamlit Cloud, MUST use pre-built 20-document database
-        if is_streamlit_cloud:
-            logger.info("🎯 STREAMLIT CLOUD DETECTED - Looking for pre-built 20-document vectordb...")
+        # Check for pre-built 20-document database (both local and Streamlit Cloud)
+        # This enables "Current documents" mode to work locally with demo data
+        if is_streamlit_cloud or True:  # Always check for demo database
+            if is_streamlit_cloud:
+                logger.info("🎯 STREAMLIT CLOUD DETECTED - Looking for pre-built 20-document vectordb...")
+            else:
+                logger.info("🎯 LOCAL ENVIRONMENT - Looking for pre-built demo vectordb for Current documents mode...")
 
             # PRIORITIZE WORKING test_single that was proven to work!
             demo_paths = [
