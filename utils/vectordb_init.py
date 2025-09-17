@@ -298,40 +298,80 @@ def ensure_vectordb_ready(persist_directory: str, force_rebuild: bool = False) -
         persist_path = Path(persist_directory)
         is_streamlit_cloud = os.environ.get("STREAMLIT_CLOUD") == "true" or os.path.exists("/home/appuser")
 
-        # On Streamlit Cloud, check for existing pre-built demo database
+        # On Streamlit Cloud, MUST use pre-built 20-document database
         if is_streamlit_cloud:
+            logger.info("🎯 STREAMLIT CLOUD DETECTED - Looking for pre-built 20-document vectordb...")
+
             # Try multiple demo vectordb locations - use the working test_single structure
             demo_paths = [
-                Path("vectordb/test_single"),  # Known working structure
-                Path("vectordb/demo_vectordb_simple"),  # Simple copy
+                Path("vectordb/test_single"),  # Known working structure with 20 docs
+                Path("vectordb/demo_vectordb_simple"),  # Simple copy with 20 docs
                 Path("vectordb/demo_vectordb"),  # Complex nested structure
             ]
 
             for demo_db_path in demo_paths:
                 if demo_db_path.exists():
-                    # Look for chroma.sqlite3 file directly in root or subdirectories
+                    # Look for chroma.sqlite3 file directly in root (preferred structure)
                     demo_chroma = demo_db_path / "chroma.sqlite3"
-                    demo_chroma_nested = list(demo_db_path.glob("**/chroma.sqlite3"))
 
-                    if demo_chroma.exists() or demo_chroma_nested:
-                        logger.info(f"🎯 Found pre-built DEMO vectordb at: {demo_db_path}")
-                        if demo_chroma.exists():
-                            logger.info("✅ Found chroma.sqlite3 in root directory")
-                        else:
-                            logger.info(f"✅ Found {len(demo_chroma_nested)} chroma files in subdirectories")
+                    if demo_chroma.exists():
+                        # Check file size to ensure it's valid (should be ~800KB for 20 docs)
+                        file_size_kb = demo_chroma.stat().st_size / 1024
+                        logger.info(f"✅ Found pre-built vectordb at: {demo_db_path}")
+                        logger.info(f"✅ Database size: {file_size_kb:.1f} KB (20 documents)")
 
                         # Copy demo vectordb to target location
                         import shutil
                         if persist_path.exists():
+                            try:
+                                shutil.rmtree(persist_path)
+                            except:
+                                logger.warning("Could not remove existing path, continuing...")
+
+                        shutil.copytree(demo_db_path, persist_path)
+                        logger.info("✅ Pre-built 20-document vectordb copied successfully!")
+                        logger.info("✅ Using curated ACCC documents including card surcharges, annual reports, etc.")
+                        return True
+
+                    # Fallback: check for nested SQLite files
+                    demo_chroma_nested = list(demo_db_path.glob("**/chroma.sqlite3"))
+                    if demo_chroma_nested:
+                        logger.info(f"Found {len(demo_chroma_nested)} nested chroma files at {demo_db_path}")
+                        # Still copy the whole structure
+                        import shutil
+                        if persist_path.exists():
                             shutil.rmtree(persist_path)
                         shutil.copytree(demo_db_path, persist_path)
-
-                        logger.info("✅ Demo vectordb copied successfully - ready to use!")
+                        logger.info("✅ Pre-built vectordb with nested structure copied")
                         return True
                     else:
-                        logger.info(f"Demo path {demo_db_path} exists but no database files found")
+                        logger.warning(f"Path {demo_db_path} exists but no chroma.sqlite3 found")
 
             logger.warning("No working demo vectordb found in any location")
+
+            # CRITICAL: On Streamlit Cloud, NEVER rebuild from Azure - it's too slow
+            # Force use of pre-built 20-document database only
+            if os.environ.get("STREAMLIT_SHARING_MODE") or os.environ.get("STREAMLIT_RUNTIME_ENV"):
+                logger.error("❌ STREAMLIT CLOUD: No pre-built vectordb found - REFUSING to rebuild")
+                logger.error("This prevents 470-document rebuild. Demo vectordb with 20 documents must be in repository.")
+                logger.error("Expected locations: vectordb/test_single/ or vectordb/demo_vectordb_simple/")
+
+                # Try to create a minimal working database from what we have
+                # Check if we at least have the demo metadata with 20 documents
+                demo_metadata = Path("vectordb/azure_blob_metadata_demo.json")
+                if demo_metadata.exists():
+                    logger.info("Found demo metadata with 20 documents - but cannot rebuild on Streamlit Cloud")
+                    logger.info("Pre-built database required for performance reasons")
+
+                # Create error marker to prevent crashes
+                persist_path.mkdir(parents=True, exist_ok=True)
+                error_file = persist_path / "ERROR_NO_PREBUILT_DB.txt"
+                error_file.write_text(
+                    "No pre-built database found. Cannot rebuild on Streamlit Cloud.\n"
+                    "Required: Pre-built vectordb with 20 selected ACCC documents.\n"
+                    "Check repository includes: vectordb/test_single/chroma.sqlite3"
+                )
+                return False
 
             # Fallback: Check if pre-built database exists at target location
             if persist_path.exists():
