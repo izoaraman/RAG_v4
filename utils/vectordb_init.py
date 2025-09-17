@@ -52,6 +52,7 @@ def rebuild_vectordb_from_azure(persist_directory: str, embedding_function) -> b
     """Rebuild vector database from Azure Blob Storage."""
 
     logger.info("Starting vector database rebuild from Azure...")
+    logger.info(f"Target directory: {persist_directory}")
 
     try:
         # Load Azure metadata
@@ -153,9 +154,7 @@ def rebuild_vectordb_from_azure(persist_directory: str, embedding_function) -> b
 
         logger.info(f"Processed {len(all_docs)} document chunks")
 
-        # Create vector database
-        from langchain_community.vectorstores import Chroma
-
+        # Create vector database - simpler approach
         # Clear existing directory
         persist_path = Path(persist_directory)
         if persist_path.exists():
@@ -164,16 +163,23 @@ def rebuild_vectordb_from_azure(persist_directory: str, embedding_function) -> b
 
         persist_path.mkdir(parents=True, exist_ok=True)
 
-        # Create new vector store with proper collection name
-        vectorstore = Chroma.from_documents(
-            documents=all_docs,
+        # Use direct Chroma initialization (without the tenants table issue)
+        from langchain_community.vectorstores import Chroma
+
+        # Split documents into texts and metadatas
+        texts = [doc.page_content for doc in all_docs]
+        metadatas = [doc.metadata for doc in all_docs]
+
+        # Create vector store using from_texts which avoids the tenants issue
+        vectorstore = Chroma.from_texts(
+            texts=texts,
+            metadatas=metadatas,
             embedding=embedding_function,
             persist_directory=persist_directory,
-            collection_name="langchain"  # Specify collection name to avoid tenants table issue
+            collection_name="langchain"
         )
 
-        # Note: persist() is deprecated in newer Chroma versions
-        # The database is automatically persisted
+        logger.info(f"Successfully created vector database with {len(all_docs)} documents")
 
         # Create summary file
         summary = {
@@ -195,6 +201,8 @@ def rebuild_vectordb_from_azure(persist_directory: str, embedding_function) -> b
 
     except Exception as e:
         logger.error(f"Failed to rebuild vector database: {e}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         return False
 
 def ensure_vectordb_ready(persist_directory: str, force_rebuild: bool = False) -> bool:
