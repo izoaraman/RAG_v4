@@ -300,28 +300,38 @@ def ensure_vectordb_ready(persist_directory: str, force_rebuild: bool = False) -
 
         # On Streamlit Cloud, check for existing pre-built demo database
         if is_streamlit_cloud:
-            # Check for demo vectordb first
-            demo_db_path = Path("vectordb/demo_vectordb")
-            if demo_db_path.exists():
-                # Look for any chroma.sqlite3 file in subdirectories
-                import glob
-                demo_chroma_files = list(demo_db_path.glob("**/chroma.sqlite3"))
-                demo_summary_files = list(demo_db_path.glob("**/creation_summary.json"))
+            # Try multiple demo vectordb locations - use the working test_single structure
+            demo_paths = [
+                Path("vectordb/test_single"),  # Known working structure
+                Path("vectordb/demo_vectordb_simple"),  # Simple copy
+                Path("vectordb/demo_vectordb"),  # Complex nested structure
+            ]
 
-                if demo_chroma_files or demo_summary_files:
-                    logger.info("🎯 Found pre-built DEMO vectordb - copying to target location")
-                    logger.info(f"Demo files found: {len(demo_chroma_files)} chroma files, {len(demo_summary_files)} summary files")
+            for demo_db_path in demo_paths:
+                if demo_db_path.exists():
+                    # Look for chroma.sqlite3 file directly in root or subdirectories
+                    demo_chroma = demo_db_path / "chroma.sqlite3"
+                    demo_chroma_nested = list(demo_db_path.glob("**/chroma.sqlite3"))
 
-                    # Copy demo vectordb to target location
-                    import shutil
-                    if persist_path.exists():
-                        shutil.rmtree(persist_path)
-                    shutil.copytree(demo_db_path, persist_path)
+                    if demo_chroma.exists() or demo_chroma_nested:
+                        logger.info(f"🎯 Found pre-built DEMO vectordb at: {demo_db_path}")
+                        if demo_chroma.exists():
+                            logger.info("✅ Found chroma.sqlite3 in root directory")
+                        else:
+                            logger.info(f"✅ Found {len(demo_chroma_nested)} chroma files in subdirectories")
 
-                    logger.info("✅ Demo vectordb copied successfully - ready to use!")
-                    return True
-                else:
-                    logger.warning("Demo vectordb directory exists but no database files found")
+                        # Copy demo vectordb to target location
+                        import shutil
+                        if persist_path.exists():
+                            shutil.rmtree(persist_path)
+                        shutil.copytree(demo_db_path, persist_path)
+
+                        logger.info("✅ Demo vectordb copied successfully - ready to use!")
+                        return True
+                    else:
+                        logger.info(f"Demo path {demo_db_path} exists but no database files found")
+
+            logger.warning("No working demo vectordb found in any location")
 
             # Fallback: Check if pre-built database exists at target location
             if persist_path.exists():
