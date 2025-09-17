@@ -60,6 +60,7 @@ vectordb/*
 !vectordb/azure_blob_metadata.json
 !vectordb/azure_blob_metadata_demo.json
 !vectordb/demo_vectordb/
+!vectordb/demo_vectordb/**
 vectordb_*/
 chroma/
 
