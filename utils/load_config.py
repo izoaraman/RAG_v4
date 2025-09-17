@@ -143,6 +143,11 @@ class LoadConfig:
             import re
             safe_engine = re.sub(r"[^A-Za-z0-9._-]+", "_", engine_label or "default")
             norm = os.path.normpath(path_str)
+
+            # Check if the suffix is already present to avoid double suffixing
+            if safe_engine in norm:
+                return norm
+
             parent = os.path.dirname(norm)
             base = os.path.basename(norm)
             return os.path.join(parent, f"{base}_{safe_engine}")
