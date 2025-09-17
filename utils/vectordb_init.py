@@ -164,14 +164,16 @@ def rebuild_vectordb_from_azure(persist_directory: str, embedding_function) -> b
 
         persist_path.mkdir(parents=True, exist_ok=True)
 
-        # Create new vector store
+        # Create new vector store with proper collection name
         vectorstore = Chroma.from_documents(
             documents=all_docs,
             embedding=embedding_function,
-            persist_directory=persist_directory
+            persist_directory=persist_directory,
+            collection_name="langchain"  # Specify collection name to avoid tenants table issue
         )
 
-        vectorstore.persist()
+        # Note: persist() is deprecated in newer Chroma versions
+        # The database is automatically persisted
 
         # Create summary file
         summary = {
