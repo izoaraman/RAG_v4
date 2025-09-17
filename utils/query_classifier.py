@@ -400,8 +400,8 @@ Use this structure for your comprehensive analysis:
         if strategy["confidence"] == "low" and strategy["include_caveats"]:
             instructions.append("Note any limitations in the available information.")
         
-        # Add instruction for both modes - UI handles Sources display
-        instructions.append("DO NOT include a Sources section in your response. The UI will handle displaying sources with clickable links separately.")
+        # Add instruction for both modes - UI handles Sources display but allow inline citations
+        instructions.append("Include inline citations [1][2][3] throughout your response to reference sources. DO NOT include a separate Sources section at the end. The UI will handle displaying sources with clickable links separately.")
         
         # Construct a MINIMAL prompt
         # Skip system_role as it's sent separately in messages

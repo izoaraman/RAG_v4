@@ -408,25 +408,33 @@ class ChatBot:
                 if not section and 'heading' in metadata:
                     section = metadata.get('heading')
 
+                # Extract page number from content or metadata
+                page_info = metadata.get('page', 'N/A')
+                if page_info == 'N/A' and content:
+                    # Try to extract page from content like "[Page 5]"
+                    page_match = re.search(r'\[Page (\d+)\]', content)
+                    if page_match:
+                        page_info = page_match.group(1)
+
                 # Format for LLM context (numbered sources)
                 markdown_documents += f"[{counter}] Source Document:\n"
                 markdown_documents += f"Content: {content}\n"
                 markdown_documents += f"Document: {display_filename}\n"
-                markdown_documents += f"Page: {metadata['page']}\n"
-                
+                markdown_documents += f"Page: {page_info}\n"
+
                 # Add proper citation format for LLM to use
                 if data_type == "Current documents":
                     # Include the exact format the LLM should use for citation
-                    markdown_documents += f"Citation format for this source: [{counter}] {display_filename} - Page {metadata['page']} View\n"
+                    markdown_documents += f"Citation format for this source: [{counter}] {display_filename} - Page {page_info} View\n"
                 else:
-                    markdown_documents += f"Citation format for this source: [{counter}] {display_filename} - Page {metadata['page']} View\n"
+                    markdown_documents += f"Citation format for this source: [{counter}] {display_filename} - Page {page_info} View\n"
 
                 # Build structured source for UI
                 source_dict = {
                     'number': counter,
                     'filename': display_filename,
                     'full_filename': full_filename,
-                    'page': metadata.get('page', 'N/A'),
+                    'page': page_info,
                     'snippet': snippet,
                     'section': section,
                     'content': content  # Full content for reference
