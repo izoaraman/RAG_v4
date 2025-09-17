@@ -56,11 +56,20 @@ def rebuild_vectordb_from_azure(persist_directory: str, embedding_function, use_
 
     try:
         # Load Azure metadata - use demo version for Streamlit Cloud
-        is_streamlit_cloud = os.environ.get("STREAMLIT_CLOUD") == "true" or os.path.exists("/home/appuser")
+        # Multiple ways to detect Streamlit Cloud environment
+        is_streamlit_cloud = (
+            os.environ.get("STREAMLIT_CLOUD") == "true" or
+            os.path.exists("/home/appuser") or
+            os.environ.get("STREAMLIT_SHARING_MODE") is not None or
+            os.environ.get("STREAMLIT_RUNTIME_ENV") is not None
+        )
+
         if is_streamlit_cloud:
             metadata_file = "vectordb/azure_blob_metadata_demo.json"
+            logger.info("🎯 STREAMLIT CLOUD DETECTED: Using 20-document demo metadata")
         else:
             metadata_file = "vectordb/azure_blob_metadata.json"
+            logger.info("🏠 LOCAL ENVIRONMENT: Using full 470-document metadata")
         metadata_path = Path(metadata_file)
 
         if not metadata_path.exists():
