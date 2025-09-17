@@ -56,59 +56,35 @@ VDB_DIR.mkdir(parents=True, exist_ok=True)
 NEW_DOC_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---------- ENV / AUTH ----------
-# Import secrets manager
-from utils.secrets_manager import get_auth_config, set_environment_from_secrets
+# Import secrets manager with error handling
+try:
+    from utils.secrets_manager import get_auth_config, set_environment_from_secrets
 
-# Set environment variables from Streamlit secrets
-set_environment_from_secrets()
+    # Set environment variables from Streamlit secrets
+    set_environment_from_secrets()
 
-# Get authentication config
-auth_config = get_auth_config()
-USERNAME = auth_config["username"]
-PASSWORD = auth_config["password"]
+    # Get authentication config
+    auth_config = get_auth_config()
+    USERNAME = auth_config["username"]
+    PASSWORD = auth_config["password"]
+except Exception as e:
+    # Fallback auth config if secrets fail
+    print(f"Warning: Could not load secrets: {e}")
+    USERNAME = "test_user"
+    PASSWORD = "sdau2025"
+    auth_config = {"username": USERNAME, "password": PASSWORD}
 
-# Ensure vector database is ready on Streamlit Cloud
+# Skip vector database initialization on Streamlit Cloud for now to prevent crashes
+# We'll rely on the pre-built database being available
 if os.environ.get("STREAMLIT_CLOUD") == "true" or os.path.exists("/home/appuser"):
     import logging
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
+    logger.info("Running on Streamlit Cloud - skipping vector database initialization")
 
-    from utils.vectordb_init import ensure_vectordb_ready
-    from utils.load_config import LoadConfig
-
-    # Check if we've already initialized in this session
+    # Mark as initialized to prevent any initialization attempts
     if "vectordb_initialized" not in st.session_state:
-        st.session_state.vectordb_initialized = False
-
-    if not st.session_state.vectordb_initialized:
-        try:
-            # Get the persist directory from config
-            app_config = LoadConfig()
-            persist_dir = app_config.persist_directory
-            logger.info(f"Initializing vector database at: {persist_dir}")
-        except Exception as e:
-            logger.error(f"Error loading config: {e}")
-            # Continue without database - app should still run
-            st.session_state.vectordb_initialized = True
-            st.warning("Could not load configuration. Some features may be limited.")
-        else:
-            # Try to ensure the database is ready (without spinner to avoid crashes)
-            try:
-                logger.info("Starting vector database initialization...")
-                result = ensure_vectordb_ready(persist_dir)
-                st.session_state.vectordb_initialized = True
-
-                if result:
-                    logger.info("Vector database initialized successfully")
-                else:
-                    logger.warning("Vector database initialization incomplete, but continuing")
-
-            except Exception as e:
-                logger.error(f"Error during vector database initialization: {e}")
-                # Mark as initialized to prevent retry loops
-                st.session_state.vectordb_initialized = True
-                # Don't crash the app - continue with limited functionality
-                st.warning("Vector database initialization had issues. Some features may be limited.")
+        st.session_state.vectordb_initialized = True
 
 # Initialize session state
 if "auth" not in st.session_state: 
