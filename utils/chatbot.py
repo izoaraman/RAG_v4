@@ -235,6 +235,25 @@ class ChatBot:
             if reranker:
                 docs = ChatBot._apply_reranking(message, docs, reranker)
 
+            # Clean source metadata in documents BEFORE passing to LLM
+            # This ensures LLM citations use clean filenames instead of full paths
+            if docs:
+                for doc in docs:
+                    if 'source' in doc.metadata:
+                        # Get the full filename from source metadata
+                        full_filename = os.path.basename(doc.metadata['source']).replace("\\", "/")
+
+                        # Clean filename for display (remove timestamp/hash prefix if present)
+                        display_filename = full_filename
+                        # Pattern to match timestamp_hash_ prefix like '20250908_022717_05ab142c_'
+                        import re as regex
+                        prefix_pattern = r'^\d{8}_\d{6}_[a-f0-9]{8}_'
+                        if regex.match(prefix_pattern, full_filename):
+                            display_filename = regex.sub(prefix_pattern, '', full_filename)
+
+                        # Replace the source metadata with clean filename
+                        doc.metadata['source'] = display_filename
+
             # Pass data_type to clean_references for proper formatting
             if not docs:
                 retrieved_content = "No relevant documents found in the vector database."
@@ -399,20 +418,10 @@ class ChatBot:
                     # If still problematic, use safe encoding
                     content = content.encode('ascii', errors='ignore').decode('ascii')
 
-                # Get the full filename from source metadata
-                full_filename = os.path.basename(metadata['source']).replace("\\", "/")
-
-                # Clean filename for display (remove timestamp/hash prefix if present)
-                display_filename = full_filename
-                # Pattern to match timestamp_hash_ prefix like '20250908_022717_05ab142c_'
-                import re as regex
-                prefix_pattern = r'^\d{8}_\d{6}_[a-f0-9]{8}_'
-                if regex.match(prefix_pattern, full_filename):
-                    display_filename = regex.sub(prefix_pattern, '', full_filename)
-
-                # CRITICAL FIX: Replace the source metadata with clean filename
-                # This ensures LLM citations show clean names instead of full paths
-                metadata['source'] = display_filename
+                # Source metadata is already cleaned before reaching this function
+                # Get the clean filename from source metadata
+                display_filename = metadata['source']
+                full_filename = display_filename  # For backward compatibility
 
                 # Extract snippet (first 150-200 chars of content for preview)
                 snippet = content[:200] + "..." if len(content) > 200 else content
