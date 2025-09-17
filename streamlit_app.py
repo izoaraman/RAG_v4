@@ -769,30 +769,28 @@ def app_view():
         # Sidebar header
         st.markdown("## Settings")
 
-        # Database status indicator (for debugging on Streamlit Cloud)
-        if "vectordb_status" in st.session_state:
-            if st.session_state.get("vectordb_initialized", False):
-                st.success(st.session_state.vectordb_status, icon="✅")
-                # Try to show document count
-                try:
-                    from utils.load_config import LoadConfig
-                    from pathlib import Path
-                    import json
-                    cfg = LoadConfig()
-                    summary_path = Path(cfg.persist_directory) / "creation_summary.json"
-                    if summary_path.exists():
-                        with open(summary_path, 'r') as f:
-                            summary = json.load(f)
-                            st.info(f"📚 Database: {summary.get('total_chunks', 0)} chunks from {summary.get('total_documents', 0)} documents")
-                except:
-                    pass
-            else:
-                st.error(st.session_state.vectordb_status, icon="❌")
+        # Generate help text based on database status
+        help_text = "Choose where answers come from"
+        if st.session_state.get("vectordb_initialized", False):
+            try:
+                from utils.load_config import LoadConfig
+                from pathlib import Path
+                import json
+                cfg = LoadConfig()
+                summary_path = Path(cfg.persist_directory) / "creation_summary.json"
+                if summary_path.exists():
+                    with open(summary_path, 'r') as f:
+                        summary = json.load(f)
+                        doc_count = summary.get('total_documents', 0)
+                        help_text = f"Choose where answers come from • {doc_count} docs ready"
+            except:
+                help_text = "Choose where answers come from • Database ready"
+
         st.session_state.rag_option = st.selectbox(
             "Ask Mode",
             ["Current documents", "New document"],
             index=0 if st.session_state.rag_option == "Current documents" else 1,
-            help="Choose where answers come from"
+            help=help_text
         )
 
         # Always show references - no toggle needed
