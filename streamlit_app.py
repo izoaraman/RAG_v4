@@ -74,17 +74,41 @@ except Exception as e:
     PASSWORD = "sdau2025"
     auth_config = {"username": USERNAME, "password": PASSWORD}
 
-# Skip vector database initialization on Streamlit Cloud for now to prevent crashes
-# We'll rely on the pre-built database being available
+# Initialize vector database on Streamlit Cloud
+# Use the pre-built database that's included in the repository
 if os.environ.get("STREAMLIT_CLOUD") == "true" or os.path.exists("/home/appuser"):
     import logging
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
-    logger.info("Running on Streamlit Cloud - skipping vector database initialization")
+    logger.info("Running on Streamlit Cloud - checking vector database...")
 
-    # Mark as initialized to prevent any initialization attempts
+    # Import necessary modules for database check
+    from utils.vectordb_init import ensure_vectordb_ready
+    from utils.load_config import LoadConfig
+
+    # Initialize database if not already done
     if "vectordb_initialized" not in st.session_state:
-        st.session_state.vectordb_initialized = True
+        try:
+            cfg = LoadConfig()
+            persist_dir = cfg.persist_directory
+
+            # Check if pre-built database exists and is valid
+            logger.info(f"Checking vector database at: {persist_dir}")
+
+            # Ensure the database is ready (will use pre-built if available)
+            if ensure_vectordb_ready(persist_dir, force_rebuild=False):
+                st.session_state.vectordb_initialized = True
+                st.session_state.vectordb_status = "Vector database successfully loaded"
+                logger.info("Vector database successfully initialized")
+            else:
+                st.session_state.vectordb_initialized = False
+                st.session_state.vectordb_status = "Failed to initialize vector database"
+                logger.error("Failed to initialize vector database")
+
+        except Exception as e:
+            logger.error(f"Error during database initialization: {e}")
+            st.session_state.vectordb_initialized = False
+            st.session_state.vectordb_status = f"Database error: {str(e)}"
 
 # Initialize session state
 if "auth" not in st.session_state: 
@@ -744,6 +768,26 @@ def app_view():
     with st.sidebar:
         # Sidebar header
         st.markdown("## Settings")
+
+        # Database status indicator (for debugging on Streamlit Cloud)
+        if "vectordb_status" in st.session_state:
+            if st.session_state.get("vectordb_initialized", False):
+                st.success(st.session_state.vectordb_status, icon="✅")
+                # Try to show document count
+                try:
+                    from utils.load_config import LoadConfig
+                    from pathlib import Path
+                    import json
+                    cfg = LoadConfig()
+                    summary_path = Path(cfg.persist_directory) / "creation_summary.json"
+                    if summary_path.exists():
+                        with open(summary_path, 'r') as f:
+                            summary = json.load(f)
+                            st.info(f"📚 Database: {summary.get('total_chunks', 0)} chunks from {summary.get('total_documents', 0)} documents")
+                except:
+                    pass
+            else:
+                st.error(st.session_state.vectordb_status, icon="❌")
         st.session_state.rag_option = st.selectbox(
             "Ask Mode",
             ["Current documents", "New document"],
