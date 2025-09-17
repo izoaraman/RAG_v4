@@ -421,9 +421,9 @@ class ChatBot:
                     # If still problematic, use safe encoding
                     content = content.encode('ascii', errors='ignore').decode('ascii')
 
-                # Source metadata is already cleaned before reaching this function
-                # Get the clean filename from source metadata
-                display_filename = metadata['source']
+                # Clean the source filename to remove local path prefix
+                raw_source = metadata['source']
+                display_filename = ChatBot._clean_source_filename(raw_source)
                 full_filename = display_filename  # For backward compatibility
 
                 # Extract snippet (first 150-200 chars of content for preview)
@@ -505,6 +505,21 @@ class ChatBot:
                 continue
 
         return markdown_documents, structured_sources
+
+    @staticmethod
+    def _clean_source_filename(source_path):
+        """Extract clean filename from source path, removing local path prefix and timestamp."""
+        import re
+        import os
+
+        # Extract just the filename part
+        filename = os.path.basename(source_path)
+
+        # Remove timestamp prefix if present (format: YYYYMMDD_HHMMSS_hexhash_)
+        timestamp_pattern = r'^\d{8}_\d{6}_[a-f0-9]{8}_'
+        clean_filename = re.sub(timestamp_pattern, '', filename)
+
+        return clean_filename
 
     @staticmethod
     def _clean_response_paths(response_text):
