@@ -92,8 +92,17 @@ def get_simple_chroma(persist_directory: str, embedding_function, collection_nam
             raise RuntimeError(f"Cannot load pre-built vector database: {e}")
 
     # For non-prebuilt databases (user uploads), handle normally
+    # Better Streamlit Cloud detection to match vectordb_init.py
+    is_streamlit_cloud_detected = (
+        os.environ.get("STREAMLIT_CLOUD") == "true" or
+        os.path.exists("/home/appuser") or
+        os.environ.get("STREAMLIT_SHARING_MODE") is not None or
+        os.environ.get("STREAMLIT_RUNTIME_ENV") is not None or
+        "/mount/src/" in os.getcwd()
+    )
+
     # For Streamlit Cloud, clear old format databases
-    if os.environ.get("STREAMLIT_CLOUD") == "true" and not is_prebuilt:
+    if is_streamlit_cloud_detected and not is_prebuilt:
         # Check if there's an old-format database
         old_db_files = [
             persist_path / "chroma.sqlite3",
@@ -128,7 +137,7 @@ def get_simple_chroma(persist_directory: str, embedding_function, collection_nam
             logger.warning(f"Chroma test failed: {e}")
 
             # On Streamlit Cloud, just clear and recreate (only for non-prebuilt)
-            if os.environ.get("STREAMLIT_CLOUD") == "true" and not is_prebuilt:
+            if is_streamlit_cloud_detected and not is_prebuilt:
                 logger.info("Clearing and recreating database on Streamlit Cloud")
                 if persist_path.exists():
                     shutil.rmtree(persist_path)
@@ -150,7 +159,7 @@ def get_simple_chroma(persist_directory: str, embedding_function, collection_nam
         logger.error(f"Failed to initialize Chroma: {e}")
 
         # Check if this is a tenants table error on Streamlit Cloud
-        if "no such table: tenants" in str(e) and os.environ.get("STREAMLIT_CLOUD") == "true":
+        if "no such table: tenants" in str(e) and is_streamlit_cloud_detected:
             logger.info("Detected tenants table error on Streamlit Cloud - using SimpleVectorDB fallback")
 
             # Use SimpleVectorDB as fallback
