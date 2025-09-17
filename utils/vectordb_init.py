@@ -92,11 +92,11 @@ def rebuild_vectordb_from_azure(persist_directory: str, embedding_function, use_
 
         # Process documents
         all_docs = []
-        batch_size = 10  # Process in smaller batches
+        batch_size = 5  # Reduced batch size to avoid memory and processing issues
 
         for i in range(0, len(uploaded_docs), batch_size):
             batch = uploaded_docs[i:i+batch_size]
-            logger.info(f"Processing batch {i//batch_size + 1}/{(len(uploaded_docs)-1)//batch_size + 1}")
+            logger.info(f"Processing document batch {i//batch_size + 1}/{(len(uploaded_docs)-1)//batch_size + 1}")
 
             for doc_info in batch:
                 try:

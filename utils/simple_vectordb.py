@@ -176,21 +176,40 @@ class SimpleVectorDB:
 
 
 def create_simple_vectordb(persist_directory: str, embedding_function, documents: List[Any]) -> SimpleVectorDB:
-    """Create and populate a simple vector database."""
+    """Create and populate a simple vector database with rate limiting."""
+    import time
 
     db = SimpleVectorDB(persist_directory, embedding_function)
 
-    # Process documents in batches
-    batch_size = 100
+    # Process documents in smaller batches to avoid rate limits
+    batch_size = 20  # Reduced from 100 to avoid rate limits
+    retry_delay = 2  # Initial delay in seconds
+    max_retries = 5
+
     for i in range(0, len(documents), batch_size):
         batch = documents[i:min(i+batch_size, len(documents))]
 
         texts = [doc.page_content for doc in batch]
         metadatas = [doc.metadata for doc in batch]
 
-        db.add_texts(texts, metadatas)
-
-        logger.info(f"Processing batch {i//batch_size + 1}/{(len(documents)-1)//batch_size + 1}")
+        # Retry logic for rate limits
+        for attempt in range(max_retries):
+            try:
+                db.add_texts(texts, metadatas)
+                logger.info(f"Processing batch {i//batch_size + 1}/{(len(documents)-1)//batch_size + 1}")
+                time.sleep(1)  # Add delay between batches to avoid rate limits
+                break
+            except Exception as e:
+                if "429" in str(e) or "rate limit" in str(e).lower():
+                    wait_time = retry_delay * (2 ** attempt)  # Exponential backoff
+                    logger.warning(f"Rate limit hit, waiting {wait_time} seconds before retry {attempt + 1}/{max_retries}")
+                    time.sleep(wait_time)
+                    if attempt == max_retries - 1:
+                        logger.error(f"Failed after {max_retries} attempts: {e}")
+                        raise
+                else:
+                    logger.error(f"Error processing batch: {e}")
+                    raise
 
     # Save to disk
     db.save()
