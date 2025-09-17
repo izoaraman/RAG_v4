@@ -639,10 +639,17 @@ def extract_cited_numbers_from_answer(answer_text):
 def render_sources(references_json: str):
     """Render source documents in a simple list format - only showing cited sources."""
     try:
+        # DEBUG: Log what render_sources received
+        print(f"DEBUG render_sources: input_type={type(references_json)}")
+        print(f"DEBUG render_sources: input_value={references_json}")
+        print(f"DEBUG render_sources: input_length={len(references_json) if references_json else 0}")
+
         # Parse JSON string from ChatBot.clean_references
         references = json.loads(references_json) if references_json else []
+        print(f"DEBUG render_sources: parsed_references_count={len(references)}")
 
         if not references:
+            print("DEBUG render_sources: No references - showing 'No source documents found'")
             return st.info("No source documents found for this query.")
 
         # Extract citation numbers from the answer
@@ -1129,7 +1136,13 @@ def app_view():
                             st.session_state.rag_option,
                             st.session_state.temperature
                         )
-                        
+
+                        # DEBUG: Log what we received (will show in Streamlit Cloud logs)
+                        print(f"DEBUG STREAMLIT: answer_length={len(answer_text) if answer_text else 0}")
+                        print(f"DEBUG STREAMLIT: refs_md_type={type(refs_md)}")
+                        print(f"DEBUG STREAMLIT: refs_md_value={refs_md}")
+                        print(f"DEBUG STREAMLIT: refs_md_length={len(refs_md) if refs_md else 0}")
+
                         # Display answer with clickable citations
                         clickable_answer = make_citations_clickable(answer_text)
                         st.markdown(f"""
