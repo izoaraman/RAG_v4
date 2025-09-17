@@ -296,7 +296,16 @@ def ensure_vectordb_ready(persist_directory: str, force_rebuild: bool = False) -
 
         # Check if we have a pre-built database first
         persist_path = Path(persist_directory)
-        is_streamlit_cloud = os.environ.get("STREAMLIT_CLOUD") == "true" or os.path.exists("/home/appuser")
+
+        # Better Streamlit Cloud detection - check multiple indicators
+        is_streamlit_cloud = (
+            os.environ.get("STREAMLIT_CLOUD") == "true" or
+            os.path.exists("/home/appuser") or
+            os.environ.get("STREAMLIT_SHARING_MODE") is not None or
+            os.environ.get("STREAMLIT_RUNTIME_ENV") is not None or
+            # Check if we're in the typical Streamlit Cloud path
+            "/mount/src/" in os.getcwd()
+        )
 
         # On Streamlit Cloud, MUST use pre-built 20-document database
         if is_streamlit_cloud:
