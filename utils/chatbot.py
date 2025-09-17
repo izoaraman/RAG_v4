@@ -410,6 +410,10 @@ class ChatBot:
                 if regex.match(prefix_pattern, full_filename):
                     display_filename = regex.sub(prefix_pattern, '', full_filename)
 
+                # CRITICAL FIX: Replace the source metadata with clean filename
+                # This ensures LLM citations show clean names instead of full paths
+                metadata['source'] = display_filename
+
                 # Extract snippet (first 150-200 chars of content for preview)
                 snippet = content[:200] + "..." if len(content) > 200 else content
 
@@ -453,8 +457,21 @@ class ChatBot:
                 # Add URL based on mode
                 if data_type == "Current documents":
                     # For Current documents mode, construct Azure Blob URL
-                    # Get the correct blob name from Azure metadata using clean filename
+                    # Use the filename with timestamp prefix for blob name lookup
                     correct_blob_name = get_azure_blob_name(display_filename)
+
+                    # If blob name lookup fails, extract blob name from the original source path
+                    if correct_blob_name == display_filename:
+                        # Extract just the blob filename from the full path
+                        original_source = doc.metadata.get('source', '')
+                        if original_source:
+                            # Get just the filename part and look it up
+                            source_basename = os.path.basename(original_source)
+                            correct_blob_name = get_azure_blob_name(source_basename.replace("\\", "/"))
+
+                    # Ensure we only use the blob name, not any path
+                    if "/" in correct_blob_name or "\\" in correct_blob_name:
+                        correct_blob_name = os.path.basename(correct_blob_name)
 
                     # Azure Blob URLs work with spaces, so don't URL encode spaces
                     # Only encode special characters that could break URLs, but keep spaces
