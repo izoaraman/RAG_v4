@@ -302,19 +302,20 @@ def ensure_vectordb_ready(persist_directory: str, force_rebuild: bool = False) -
         if is_streamlit_cloud:
             logger.info("🎯 STREAMLIT CLOUD DETECTED - Looking for pre-built 20-document vectordb...")
 
-            # Try multiple demo vectordb locations - use the actual existing paths
+            # PRIORITIZE WORKING test_single that was proven to work!
             demo_paths = [
-                Path("vectordb/azure_docs_db_text-embedding-ada-002/azure_docs_db_text-embedding-ada-002_20docs"),  # 62MB with 4924 chunks from 20 docs
-                Path("vectordb/demo_vectordb/azure_docs_db_text-embedding-ada-002_20docs"),  # Same 62MB database (backup)
-                Path("vectordb/test_single"),  # 804KB with 35 chunks (fallback)
-                Path("vectordb/demo_vectordb_simple"),  # 804KB copy of test_single (fallback)
+                Path("vectordb/test_single"),  # 804KB WORKING database - use this first!
+                Path("vectordb/demo_vectordb_simple"),  # 804KB copy of test_single
+                Path("vectordb/cloud_test"),  # Another 804KB test database
+                # Skip the 62MB databases - they have corruption issues
+                # Path("vectordb/azure_docs_db_text-embedding-ada-002/azure_docs_db_text-embedding-ada-002_20docs"),
+                # Path("vectordb/demo_vectordb/azure_docs_db_text-embedding-ada-002_20docs"),
             ]
 
             for demo_db_path in demo_paths:
                 # Make path absolute for Streamlit Cloud
                 if not demo_db_path.is_absolute():
                     # Convert to absolute path based on current working directory
-                    import os
                     cwd = Path(os.getcwd())
                     demo_db_path_abs = cwd / demo_db_path
                 else:
