@@ -194,7 +194,13 @@ def upload_data_for_mode(mode="current", clear_existing=False, enable_multimodal
     
     ensure_directory_access(persist_dir)
     ensure_directory_access(data_directory)
-    existing_hashes = get_existing_file_hashes(persist_dir)
+
+    # For in-memory mode on Streamlit Cloud, skip hash file operations
+    if mode == "new" and (os.environ.get("STREAMLIT_CLOUD") == "true" or os.path.exists("/home/appuser")):
+        existing_hashes = {}  # Always treat as fresh upload in-memory
+        print("Using in-memory mode - treating all files as new for processing")
+    else:
+        existing_hashes = get_existing_file_hashes(persist_dir)
     
     print(f"Checking directory: {data_directory}")
     print(f"Using persist directory: {persist_dir}")
@@ -298,12 +304,21 @@ def upload_data_for_mode(mode="current", clear_existing=False, enable_multimodal
         return
     
     # Use simplified Chroma initialization
-    vectordb = get_simple_chroma(
-        persist_directory=persist_dir,
-        embedding_function=CONFIG.embedding_model,
-        collection_name="langchain",
-        mode=mode  # Pass mode to handle in-memory for "new" on Streamlit Cloud
-    )
+    # For "new" mode on Streamlit Cloud, force in-memory to avoid readonly filesystem issues
+    if mode == "new" and (os.environ.get("STREAMLIT_CLOUD") == "true" or os.path.exists("/home/appuser")):
+        print("Using in-memory vector database for New document mode on Streamlit Cloud")
+        from langchain_community.vectorstores import Chroma
+        vectordb = Chroma(
+            embedding_function=CONFIG.embedding_model,
+            collection_name="langchain_new_docs"
+        )
+    else:
+        vectordb = get_simple_chroma(
+            persist_directory=persist_dir,
+            embedding_function=CONFIG.embedding_model,
+            collection_name="langchain",
+            mode=mode  # Pass mode to handle in-memory for "new" on Streamlit Cloud
+        )
     
     # Prepare lists of texts and metadata from the new chunks.
     new_texts = [doc.page_content for doc in chunked_new_docs]
@@ -343,8 +358,12 @@ def upload_data_for_mode(mode="current", clear_existing=False, enable_multimodal
             raise Exception(f"Failed to process batch {batch_idx+1} after multiple retries due to rate limits.")
 
     # Update the file hashes metadata file with new hashes.
-    existing_hashes.update(new_hashes)
-    update_file_hashes(persist_dir, existing_hashes)
+    # Skip hash updates for in-memory databases on Streamlit Cloud
+    if not (mode == "new" and (os.environ.get("STREAMLIT_CLOUD") == "true" or os.path.exists("/home/appuser"))):
+        existing_hashes.update(new_hashes)
+        update_file_hashes(persist_dir, existing_hashes)
+    else:
+        print("Skipping hash file update for in-memory database on Streamlit Cloud")
     
     print(f"Updated VectorDB with {len(new_files)} new document(s).")
     print(f"VectorDB location: {persist_dir}")
