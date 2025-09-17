@@ -28,6 +28,15 @@ except ImportError:
     RAPTOR_AVAILABLE = False
     logging.warning("RAPTOR not available")
 
+# Import hybrid RAG router
+try:
+    from hybrid_rag.router_graph import HybridRAGRouter
+    HYBRID_RAG_ROUTER_AVAILABLE = True
+    logging.info("Hybrid RAG router loaded successfully")
+except ImportError as e:
+    HYBRID_RAG_ROUTER_AVAILABLE = False
+    logging.warning(f"Hybrid RAG router not available: {e}")
+
 APPCFG = LoadConfig()
 
 CODESPACE_NAME = os.getenv("CODESPACE_NAME")
@@ -69,10 +78,11 @@ class ChatBot:
     """
     Enhanced ChatBot with advanced retrieval and reranking capabilities
     """
-    
+
     # Class-level configuration for enhanced features
     USE_RERANKER = True
     USE_RAPTOR = False  # Can be enabled for specific use cases
+    USE_HYBRID_RAG = None  # Will be determined from config
     RERANKER_TOP_K = 10  # Retrieve more documents for reranking
     FINAL_TOP_K = 5      # Final number of documents to use
     
@@ -130,6 +140,49 @@ class ChatBot:
     @staticmethod
     def respond(chatbot, message, data_type="Current documents", temperature=0.0):
         try:
+            # Check if hybrid RAG is enabled in config
+            if ChatBot.USE_HYBRID_RAG is None:
+                try:
+                    import yaml
+                    config_path = "configs/app_config.yml"
+                    if os.path.exists(config_path):
+                        with open(config_path, 'r') as f:
+                            config = yaml.safe_load(f)
+                            ChatBot.USE_HYBRID_RAG = config.get('hybrid_rag', {}).get('enabled', False)
+                    else:
+                        ChatBot.USE_HYBRID_RAG = False
+                except:
+                    ChatBot.USE_HYBRID_RAG = False
+
+            # Use hybrid RAG router if available and enabled
+            if ChatBot.USE_HYBRID_RAG and HYBRID_RAG_ROUTER_AVAILABLE and data_type == "Current documents":
+                try:
+                    logging.info("Using Hybrid RAG Router for query processing")
+                    router = HybridRAGRouter()
+
+                    # Convert chatbot history to expected format
+                    history = []
+                    for i in range(0, len(chatbot), 2):
+                        if i + 1 < len(chatbot):
+                            history.append({
+                                'question': chatbot[i].get('content', ''),
+                                'answer': chatbot[i + 1].get('content', '')
+                            })
+
+                    # Run the hybrid router
+                    result = router.run_router(message, history)
+
+                    # Update chatbot with the response
+                    chatbot.append({"role": "user", "content": message})
+                    chatbot.append({"role": "assistant", "content": result['answer']})
+
+                    # Return answer, updated chatbot, and sources
+                    return result['answer'], chatbot, result.get('sources', [])
+
+                except Exception as e:
+                    logging.error(f"Hybrid RAG router failed: {e}, falling back to standard retrieval")
+                    # Continue with standard retrieval if hybrid fails
+
             query_lower = message.lower()
             # Check if the query is asking for a full list of documents.
             if ("list" in query_lower and "document" in query_lower

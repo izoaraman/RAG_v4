@@ -15,6 +15,17 @@ import os
 from typing import List
 import time
 import openai
+import logging
+
+# Import hybrid RAG components
+try:
+    from hybrid_rag.index_multimodal import MultimodalIndexer
+    from hybrid_rag.index_graph import GraphIndexer
+    HYBRID_RAG_AVAILABLE = True
+    logging.info("Hybrid RAG components loaded successfully")
+except ImportError as e:
+    HYBRID_RAG_AVAILABLE = False
+    logging.warning(f"Hybrid RAG components not available: {e}")
 
 # Graceful import for langchain_openai
 try:
@@ -142,11 +153,70 @@ class PrepareVectorDB:
         print("Number of chunks:", len(chunked_documents), "\n\n")
         return chunked_documents
 
-    def prepare_and_save_vectordb(self):
+    def prepare_and_save_vectordb(self, enable_hybrid_rag=True):
         ensure_directory_access(self.persist_directory)
         docs = self.__load_all_documents()
         chunked_documents = self.__chunk_documents(docs)
         print("Preparing vectordb...")
+
+        # Run hybrid RAG indexing if available and enabled
+        if enable_hybrid_rag and HYBRID_RAG_AVAILABLE:
+            print("Running hybrid RAG indexing...")
+            try:
+                # Load config for hybrid RAG settings
+                import yaml
+                config_path = "configs/app_config.yml"
+                if os.path.exists(config_path):
+                    with open(config_path, 'r') as f:
+                        config = yaml.safe_load(f)
+                        hybrid_config = config.get('hybrid_rag', {})
+
+                        # Run multimodal indexing if enabled
+                        if hybrid_config.get('multimodal', {}).get('enabled', False):
+                            print("Running multimodal indexing...")
+                            mm_indexer = MultimodalIndexer(
+                                persist_directory=hybrid_config['multimodal'].get('persist_directory', 'data/vectordb/multimodal/chroma/'),
+                                collection_name=hybrid_config['multimodal'].get('collection_name', 'docs_mm')
+                            )
+                            # Process documents for multimodal indexing
+                            if isinstance(self.data_directory, list):
+                                for doc_path in self.data_directory:
+                                    if doc_path.lower().endswith('.pdf'):
+                                        mm_indexer.process_document(doc_path)
+                            else:
+                                pdf_files = [f for f in os.listdir(self.data_directory)
+                                           if f.lower().endswith('.pdf')]
+                                for pdf_file in pdf_files:
+                                    file_path = os.path.join(self.data_directory, pdf_file)
+                                    mm_indexer.process_document(file_path)
+                            print("Multimodal indexing completed")
+
+                        # Run graph indexing if enabled
+                        if hybrid_config.get('graph', {}).get('enabled', False):
+                            print("Running knowledge graph indexing...")
+                            graph_indexer = GraphIndexer(
+                                store_path=hybrid_config['graph'].get('store_path', 'data/kg/'),
+                                use_azure_openai=hybrid_config['graph'].get('use_azure_openai', True)
+                            )
+                            # Process documents for graph indexing
+                            for doc in docs:
+                                if hasattr(doc, 'page_content'):
+                                    doc_id = doc.metadata.get('source', 'unknown')
+                                    graph_indexer.process_document(doc.page_content, doc_id)
+
+                            # Build and save graph
+                            graph_indexer.build_graph()
+                            graph_indexer.detect_communities()
+                            if hybrid_config['graph'].get('use_azure_openai', True):
+                                graph_indexer.summarize_communities_azure()
+                            else:
+                                graph_indexer.summarize_communities_fallback()
+                            graph_indexer.save_graph(hybrid_config['graph'].get('graph_name', 'knowledge_graph'))
+                            print("Knowledge graph indexing completed")
+
+            except Exception as e:
+                print(f"Warning: Hybrid RAG indexing encountered an error: {e}")
+                print("Continuing with standard vector indexing...")
 
         max_retries = 5
         retries = 0
