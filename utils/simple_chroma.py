@@ -167,6 +167,44 @@ def get_simple_chroma(persist_directory: str, embedding_function, collection_nam
                     logger.info(f"Loaded existing SimpleVectorDB with {db.count()} documents")
                     return db
 
+            # If no existing SimpleVectorDB but we have a ChromaDB that failed to load,
+            # try to extract data from it
+            chroma_sqlite = persist_path / "chroma.sqlite3"
+            if chroma_sqlite.exists():
+                logger.info("Attempting to extract data from ChromaDB and convert to SimpleVectorDB")
+                try:
+                    # Try to extract data using chromadb client directly
+                    import chromadb
+                    client = chromadb.PersistentClient(path=str(persist_path))
+
+                    # Get the default collection
+                    collection = client.get_or_create_collection("langchain")
+
+                    # Get all documents
+                    results = collection.get()
+
+                    if results and results.get('documents'):
+                        documents = results['documents']
+                        metadatas = results.get('metadatas', [{}] * len(documents))
+
+                        logger.info(f"Successfully extracted {len(documents)} documents from ChromaDB")
+
+                        # Add documents to SimpleVectorDB in batches
+                        batch_size = 10
+                        for i in range(0, len(documents), batch_size):
+                            batch_docs = documents[i:i+batch_size]
+                            batch_meta = metadatas[i:i+batch_size]
+
+                            db.add_texts(batch_docs, batch_meta)
+
+                        # Save the database
+                        db.save()
+                        logger.info(f"Successfully converted ChromaDB to SimpleVectorDB with {db.count()} documents")
+                        return db
+
+                except Exception as extract_error:
+                    logger.warning(f"Failed to extract data from ChromaDB: {extract_error}")
+
             # If no existing data and this is azure_docs_db, rebuild from Azure
             if "azure_docs_db" in str(persist_path):
                 logger.info("Rebuilding SimpleVectorDB from Azure for azure_docs_db")
