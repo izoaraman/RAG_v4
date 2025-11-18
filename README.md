@@ -1,6 +1,16 @@
 # RAG\_v4
 
-Retrieval-Augmented Generation (RAG) system for a knowledge management chatbot to search and answer questions in documents with Azure integration.
+Retrieval-Augmented Generation (RAG) system for a knowledge management assistant to search and answer from your data with Azure integration.
+
+## Features
+
+- Document processing supporting multiple formats (PDF, DOCX, TXT, CSV, HTML)
+- Vector-based semantic search with advanced reranking capabilities
+- Interactive chat interface with source citations and document links
+- Azure Blob Storage integration for scalable document management
+- Multiple retrieval strategies including dense and sparse search
+- Hybrid RAG architecture with multimodal and graph-based retrieval
+- Real-time document upload and processing capabilities
 
 ## What’s new vs RAG\_v3
 
